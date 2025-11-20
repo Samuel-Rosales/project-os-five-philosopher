@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Cena de los Filósofos</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: sans-serif; }
+        #info {
+            position: absolute; top: 10px; width: 100%; text-align: center; color: white; pointer-events: none; z-index: 10;
+            text-shadow: 1px 1px 2px black; font-size: 1.2rem;
+        }
+        #loading { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: white; font-size: 24px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;
+        }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="info">
+        <h1>La Cena de los Filósofos</h1>
+        🤔 Pensando &nbsp;&nbsp; | &nbsp;&nbsp; 🤤 Hambriento &nbsp;&nbsp; | &nbsp;&nbsp; 😋 Comiendo
+    </div>
+    <div id="loading">Cargando Modelos...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+        // --- 1. GENERADOR DE TEXTURAS DE EMOJIS ---
+        function createEmojiTexture(emoji) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const context = canvas.getContext('2d');
+            context.font = '100px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(emoji, 64, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const texThinking = createEmojiTexture('🤔');
+        const texHungry = createEmojiTexture('🤤');
+        const texEating = createEmojiTexture('😋');
+
+
+        // --- ESCENA ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        scene.fog = new THREE.Fog(0x222222, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 20); 
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+        scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const philosophers = []; 
+        const forks = [];  
+        const mixers = []; 
+        const clock = new THREE.Clock(); 
+        const PHILO_COUNT = 5;
+        const TABLE_RADIUS = 4;
+
+        // 1. MESA
+        const tableGeometry = new THREE.CylinderGeometry(TABLE_RADIUS, TABLE_RADIUS, 0.2, 32);
+        const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const table = new THREE.Mesh(tableGeometry, tableMaterial);
+        table.position.y = 1.7; 
+        table.receiveShadow = true;
+        scene.add(table);
+
+        const legGeo = new THREE.CylinderGeometry(0.5, 0.8, 1.8, 16);
+        const leg = new THREE.Mesh(legGeo, tableMaterial);
+        leg.position.y = 0.9;
+        scene.add(leg);
+
+        // --- CARGAR MODELOS ---
+        const loader = new GLTFLoader();
+
+        // 1. Cargar Silla
+        loader.load('./chair.glb', function (gltfChair) {
+            const chairBase = gltfChair.scene;
+
+            // 2. Cargar Hombre
+            loader.load('./Man.glb', function (gltfMan) {
+                
+                const manBase = gltfMan.scene;
+                const animations = gltfMan.animations;
+                document.getElementById('loading').style.display = 'none';
+
+                const clipSitting = THREE.AnimationClip.findByName(animations, 'HumanArmature|Man_Sitting');
+                const clipClapping = THREE.AnimationClip.findByName(animations, 'HumanArmature|Man_Clapping');
+
+                for (let i = 0; i < PHILO_COUNT; i++) {
+                    const angle = (i / PHILO_COUNT) * Math.PI * 2;
+                    const x = Math.cos(angle) * (TABLE_RADIUS + 0.8); 
+                    const z = Math.sin(angle) * (TABLE_RADIUS + 0.8);
+                    
+                    // A. SILLA
+                    const distanceFromTable = TABLE_RADIUS + 1.6;
+                    const x1 = Math.cos(angle) * distanceFromTable;
+                    const z1 = Math.sin(angle) * distanceFromTable;
+
+                    const chair = chairBase.clone();
+                    chair.scale.set(4, 4, 4); 
+                    chair.position.set(x1, -0.5, z1);
+                    chair.rotation.y = -angle - Math.PI / 2 + Math.PI; 
+                    chair.traverse((c) => { if (c.isMesh) c.castShadow = true; });
+                    scene.add(chair);
+
+                    // B. FILÓSOFO
+                    const philo = SkeletonUtils.clone(manBase);
+                    philo.scale.set(1.5, 1.5, 1.5); 
+                    philo.position.set(x, 0, z); 
+                    philo.rotation.y = -angle - Math.PI / 2; 
+
+                    philo.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.material = child.material.clone(); 
+                        }
+                    });
+
+                    // --- C. EMOJI FLOTANTE ---
+                    const spriteMaterial = new THREE.SpriteMaterial({ map: texThinking });
+                    const sprite = new THREE.Sprite(spriteMaterial);
+                    sprite.scale.set(1.5, 1.5, 1); 
+                    sprite.position.y = 5; // Encima de la cabeza
+                    philo.add(sprite); // El emoji es hijo del filósofo
+                    philo.userData.emojiSprite = sprite; // Guardar referencia
+
+                    scene.add(philo);
+                    philosophers.push(philo);
+
+                    // D. ANIMACIONES
+                    const mixer = new THREE.AnimationMixer(philo);
+                    mixers.push(mixer);
+                    philo.userData.actions = {};
+                    
+                    if (clipSitting) {
+                        const action = mixer.clipAction(clipSitting);
+                        action.setLoop(THREE.LoopRepeat, Infinity);
+                        philo.userData.actions['SITTING'] = action;
+                    }
+                    if (clipClapping) {
+                        const action = mixer.clipAction(clipClapping);
+                        action.setLoop(THREE.LoopRepeat, Infinity);
+                        philo.userData.actions['CLAPPING'] = action;
+                    }
+
+                    // E. TENEDOR
+                    const angleFork = ((i + 0.5) / PHILO_COUNT) * Math.PI * 2;
+                    const fX = Math.cos(angleFork) * (TABLE_RADIUS - 1);
+                    const fZ = Math.sin(angleFork) * (TABLE_RADIUS - 1);
+                    const fork = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.1, 0.1, 1), 
+                        new THREE.MeshStandardMaterial({ color: 0xC0C0C0 })
+                    );
+                    fork.position.set(fX, 1.9, fZ);
+                    fork.lookAt(0, 1.9, 0);
+                    scene.add(fork);
+                    forks.push(fork);
+                }
+
+                // Inicializar
+                for (let i = 0; i < PHILO_COUNT; i++) {
+                    const philo = philosophers[i];
+                    if(philo) {
+                        philo.userData.currentState = null;
+                        window.actualizarFilosofo(i, 'THINKING');
+                    }
+                }
+                iniciarPrueba();
+
+            }, undefined, function(e) { console.error("Error cargando Man.glb", e); }); 
+        }, undefined, function(e) { console.error("Error cargando chair.glb", e); }); 
+
+
+        // --- LÓGICA ---
+        function checkForksGlobal() {
+            for (let i = 0; i < PHILO_COUNT; i++) {
+                const leftN = i; 
+                const rightN = (i + 1) % PHILO_COUNT;
+                const isLeftEating = philosophers[leftN].userData.state === 'EATING';
+                const isRightEating = philosophers[rightN].userData.state === 'EATING';
+                
+                forks[i].visible = !(isLeftEating || isRightEating);
+            }
+        }
+
+        window.actualizarFilosofo = function(id, estado) {
+            const philo = philosophers[id];
+            const mixer = mixers[id];
+            if (!philo || !mixer) return;
+
+            if (philo.userData.currentState === estado) return;
+            philo.userData.currentState = estado;
+            philo.userData.state = estado; 
+
+            const actions = philo.userData.actions;
+            const sprite = philo.userData.emojiSprite;
+            const fadeDuration = 0.5;
+
+            if (estado === 'THINKING') {
+                if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fadeDuration);
+                if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fadeDuration).play();
+                
+                // Emoji Pensando
+                if (sprite) sprite.material.map = texThinking;
+            } 
+            else if (estado === 'HUNGRY') {
+                // Misma animación (Sentado), pero cambia Emoji
+                if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fadeDuration);
+                if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fadeDuration).play();
+
+                // Emoji Hambriento
+                if (sprite) sprite.material.map = texHungry;
+            }
+            else if (estado === 'EATING') {
+                if (actions['SITTING']) actions['SITTING'].fadeOut(fadeDuration);
+                if (actions['CLAPPING']) actions['CLAPPING'].reset().fadeIn(fadeDuration).play();
+
+                // Emoji Comiendo
+                if (sprite) sprite.material.map = texEating;
+            }
+            checkForksGlobal();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            mixers.forEach(m => m.update(delta));
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        function iniciarPrueba() {
+            console.log("Iniciando simulación...");
+            setInterval(() => {
+                const id = Math.floor(Math.random() * PHILO_COUNT);
+                const philo = philosophers[id];
+                const currentState = philo.userData.state;
+
+                if (currentState === 'THINKING') {
+                    window.actualizarFilosofo(id, 'HUNGRY');
+                } 
+                else if (currentState === 'HUNGRY') {
+                    const leftN = (id + PHILO_COUNT - 1) % PHILO_COUNT;
+                    const rightN = (id + 1) % PHILO_COUNT;
+
+                    if (philosophers[leftN].userData.state !== 'EATING' && philosophers[rightN].userData.state !== 'EATING') {
+                        window.actualizarFilosofo(id, 'EATING');
+                        const tiempoComiendo = 3000 + Math.random() * 2000;
+                        setTimeout(() => {
+                            if (philosophers[id].userData.state === 'EATING') {
+                                window.actualizarFilosofo(id, 'THINKING');
+                            }
+                        }, tiempoComiendo);
+                    }
+                }
+            }, 500);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
