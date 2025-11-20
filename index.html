@@ -12,7 +12,42 @@
         #loading { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             color: white; font-size: 24px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;
+            pointer-events: none;
         }
+
+        /* --- ESTILOS DE LOS BOTONES DE CÁMARA --- */
+        #cam-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 10px;
+            user-select: none;
+        }
+        #cam-controls button {
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            margin: 2px;
+            cursor: pointer;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 5px;
+            touch-action: manipulation;
+        }
+        #cam-controls button:active {
+            background: #555;
+        }
+        .row { display: flex; justify-content: center; }
+        
+        /* Ayuda visual para teclas */
+        .key-hint { font-size: 10px; color: #aaa; position: absolute; bottom: 2px; right: 2px; pointer-events: none;}
     </style>
     
     <script type="importmap">
@@ -29,8 +64,26 @@
     <div id="info">
         <h1>La Cena de los Filósofos</h1>
         🤔 Pensando &nbsp;&nbsp; | &nbsp;&nbsp; 🤤 Hambriento &nbsp;&nbsp; | &nbsp;&nbsp; 😋 Comiendo
+        <br><span style="font-size: 0.8rem; color: #ccc;">(Usa Mouse, Botones o Teclado WASD)</span>
     </div>
     <div id="loading">Cargando Modelos...</div>
+
+    <div id="cam-controls">
+        <div class="row">
+            <button onmousedown="startMove('up')" onmouseup="stopMove()" ontouchstart="startMove('up')" ontouchend="stopMove()">⬆️</button>
+        </div>
+        <div class="row">
+            <button onmousedown="startMove('left')" onmouseup="stopMove()" ontouchstart="startMove('left')" ontouchend="stopMove()">⬅️</button>
+            <button onmousedown="startMove('right')" onmouseup="stopMove()" ontouchstart="startMove('right')" ontouchend="stopMove()">➡️</button>
+        </div>
+        <div class="row">
+            <button onmousedown="startMove('down')" onmouseup="stopMove()" ontouchstart="startMove('down')" ontouchend="stopMove()">⬇️</button>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+            <button onmousedown="startMove('in')" onmouseup="stopMove()" ontouchstart="startMove('in')" ontouchend="stopMove()">➕</button>
+            <button onmousedown="startMove('out')" onmouseup="stopMove()" ontouchstart="startMove('out')" ontouchend="stopMove()">➖</button>
+        </div>
+    </div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -59,11 +112,10 @@
         // --- ESCENA ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x222222);
-        scene.fog = new THREE.Fog(0x222222, 10, 50);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 20, 20); 
-        camera.lookAt(10, 10,10);
+        camera.lookAt(0, 2, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -71,6 +123,14 @@
         document.body.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
+
+        controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE, 
+            MIDDLE: THREE.MOUSE.DOLLY, 
+            RIGHT: THREE.MOUSE.PAN    
+        }
+        
+        controls.maxPolarAngle = Math.PI / 2 - 0.1;
         
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
         scene.add(hemiLight);
@@ -80,7 +140,7 @@
         scene.add(dirLight);
 
         const philosophers = []; 
-        const forks = [];  
+        const forks = [];   
         const mixers = []; 
         const clock = new THREE.Clock(); 
         const PHILO_COUNT = 5;
@@ -101,6 +161,31 @@
 
         // --- CARGAR MODELOS ---
         const loader = new GLTFLoader();
+
+        loader.load('realistic_forest.glb', function (gltf) {
+            const forest = gltf.scene;
+            
+            const box = new THREE.Box3().setFromObject(forest);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+
+            const maxDim = Math.max(size.x, size.z); 
+            const targetSize = 150; 
+            const scaleFactor = targetSize / maxDim;
+
+            forest.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+            forest.position.x = -center.x * scaleFactor;
+            forest.position.y = -center.y * scaleFactor + 38.5; 
+            forest.position.z = -center.z * scaleFactor;
+
+            scene.add(forest);
+
+        }, undefined, function (error) {
+            console.error("Error cargando el bosque:", error);
+        });
 
         // 1. Cargar Silla
         loader.load('./chair.glb', function (gltfChair) {
@@ -150,9 +235,9 @@
                     const spriteMaterial = new THREE.SpriteMaterial({ map: texThinking });
                     const sprite = new THREE.Sprite(spriteMaterial);
                     sprite.scale.set(1.5, 1.5, 1); 
-                    sprite.position.y = 5; // Encima de la cabeza
-                    philo.add(sprite); // El emoji es hijo del filósofo
-                    philo.userData.emojiSprite = sprite; // Guardar referencia
+                    sprite.position.y = 5; 
+                    philo.add(sprite); 
+                    philo.userData.emojiSprite = sprite; 
 
                     scene.add(philo);
                     philosophers.push(philo);
@@ -229,32 +314,84 @@
             if (estado === 'THINKING') {
                 if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fadeDuration);
                 if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fadeDuration).play();
-                
-                // Emoji Pensando
                 if (sprite) sprite.material.map = texThinking;
             } 
             else if (estado === 'HUNGRY') {
-                // Misma animación (Sentado), pero cambia Emoji
                 if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fadeDuration);
                 if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fadeDuration).play();
-
-                // Emoji Hambriento
                 if (sprite) sprite.material.map = texHungry;
             }
             else if (estado === 'EATING') {
                 if (actions['SITTING']) actions['SITTING'].fadeOut(fadeDuration);
                 if (actions['CLAPPING']) actions['CLAPPING'].reset().fadeIn(fadeDuration).play();
-
-                // Emoji Comiendo
                 if (sprite) sprite.material.map = texEating;
             }
             checkForksGlobal();
         }
 
+        // --- VARIABLES PARA LOS BOTONES Y TECLADO ---
+        let moveDirection = null;
+        window.startMove = function(dir) {
+            moveDirection = dir;
+        };
+        window.stopMove = function() {
+            moveDirection = null;
+        };
+
+        // --- ESCUCHAR TECLADO ---
+        window.addEventListener('keydown', (event) => {
+            const key = event.key.toLowerCase();
+            if (key === 'arrowleft' || key === 'a') startMove('left');
+            if (key === 'arrowright' || key === 'd') startMove('right');
+            if (key === 'arrowup' || key === 'w') startMove('up');
+            if (key === 'arrowdown' || key === 's') startMove('down');
+            if (key === '+' || key === 'q') startMove('in'); 
+            if (key === '-' || key === 'e') startMove('out'); 
+        });
+
+        window.addEventListener('keyup', (event) => {
+            stopMove();
+        });
+
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
             mixers.forEach(m => m.update(delta));
+            
+            // --- LÓGICA DE MOVIMIENTO POR BOTONES/TECLADO ---
+            if (moveDirection) {
+                const speed = 0.05; 
+                const zoomSpeed = 0.5; 
+
+                if (moveDirection === 'left') {
+                    const x = camera.position.x;
+                    const z = camera.position.z;
+                    camera.position.x = x * Math.cos(speed) - z * Math.sin(speed);
+                    camera.position.z = x * Math.sin(speed) + z * Math.cos(speed);
+                }
+                else if (moveDirection === 'right') {
+                    const x = camera.position.x;
+                    const z = camera.position.z;
+                    camera.position.x = x * Math.cos(-speed) - z * Math.sin(-speed);
+                    camera.position.z = x * Math.sin(-speed) + z * Math.cos(-speed);
+                }
+                else if (moveDirection === 'up') {
+                    camera.position.y += zoomSpeed; 
+                }
+                else if (moveDirection === 'down') {
+                    camera.position.y -= zoomSpeed;
+                    if(camera.position.y < 1) camera.position.y = 1; 
+                }
+                else if (moveDirection === 'in') {
+                    camera.translateZ(-zoomSpeed); 
+                }
+                else if (moveDirection === 'out') {
+                    camera.translateZ(zoomSpeed); 
+                }
+                
+                camera.lookAt(0, 2, 0); 
+            }
+            
             controls.update();
             renderer.render(scene, camera);
         }
