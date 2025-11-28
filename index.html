@@ -2,52 +2,104 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Cena de los Filósofos</title>
+    <title>Cena de los Filósofos - Simulación 3D</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* --- INTERFAZ DE USUARIO (HUD) --- */
         #info {
             position: absolute; top: 10px; width: 100%; text-align: center; color: white; pointer-events: none; z-index: 10;
-            text-shadow: 1px 1px 2px black; font-size: 1.2rem;
-        }
-        #loading { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: white; font-size: 24px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;
-            pointer-events: none;
+            text-shadow: 1px 1px 2px black; font-size: 1.2rem; opacity: 0; transition: opacity 1s;
         }
 
-        /* --- ESTILOS DE LOS BOTONES DE CÁMARA --- */
-        #cam-controls {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            z-index: 100;
+        /* --- PANTALLA DE PRESENTACIÓN (OVERLAY) --- */
+        #presentation {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 10px;
+            justify-content: center;
+            z-index: 200;
+            backdrop-filter: blur(5px);
+            transition: opacity 0.5s ease;
+        }
+
+        .content-box {
+            max-width: 800px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        h1 { margin-top: 0; color: #ffca28; text-transform: uppercase; letter-spacing: 2px; }
+        p { line-height: 1.6; color: #ddd; font-size: 1.1rem; }
+
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .legend-item {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
             border-radius: 10px;
-            user-select: none;
+            width: 200px;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .legend-item.thinking { border-color: #4fc3f7; }
+        .legend-item.hungry { border-color: #ffb74d; }
+        .legend-item.eating { border-color: #66bb6a; }
+
+        .emoji { font-size: 3rem; display: block; margin-bottom: 10px; }
+        .state-title { font-weight: bold; display: block; margin-bottom: 5px; color: white; }
+        .anim-desc { font-size: 0.9rem; color: #aaa; font-style: italic; }
+
+        #btn-start {
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            background-color: #ffca28;
+            color: #333;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s, background 0.2s;
+            margin-top: 20px;
+            opacity: 0.5;
+            pointer-events: none; /* Desactivado hasta cargar */
+        }
+
+        #btn-start.ready {
+            opacity: 1;
+            pointer-events: all;
+            box-shadow: 0 0 20px rgba(255, 202, 40, 0.4);
+        }
+
+        #btn-start:hover { transform: scale(1.05); background-color: #ffb300; }
+        #btn-start:active { transform: scale(0.95); }
+
+        /* --- CONTROLES DE CÁMARA --- */
+        #cam-controls {
+            position: absolute; bottom: 20px; right: 20px; z-index: 100;
+            display: flex; flex-direction: column; align-items: center;
+            background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px; user-select: none;
+            display: none; /* Oculto al inicio */
         }
         #cam-controls button {
-            width: 40px;
-            height: 40px;
-            font-size: 20px;
-            margin: 2px;
-            cursor: pointer;
-            background: #333;
-            color: white;
-            border: 1px solid #555;
-            border-radius: 5px;
-            touch-action: manipulation;
+            width: 40px; height: 40px; font-size: 20px; margin: 2px; cursor: pointer;
+            background: #333; color: white; border: 1px solid #555; border-radius: 5px; touch-action: manipulation;
         }
-        #cam-controls button:active {
-            background: #555;
-        }
+        #cam-controls button:active { background: #555; }
         .row { display: flex; justify-content: center; }
-        
-        /* Ayuda visual para teclas */
-        .key-hint { font-size: 10px; color: #aaa; position: absolute; bottom: 2px; right: 2px; pointer-events: none;}
     </style>
     
     <script type="importmap">
@@ -61,24 +113,53 @@
 </head>
 <body>
 
-    <div id="info">
-        <h1>La Cena de los Filósofos</h1>
-        🤔 Pensando &nbsp;&nbsp; | &nbsp;&nbsp; 🤤 Hambriento &nbsp;&nbsp; | &nbsp;&nbsp; 😋 Comiendo
-        <br><span style="font-size: 0.8rem; color: #ccc;">(Usa Mouse, Botones o Teclado WASD)</span>
+    <div id="presentation">
+        <div class="content-box">
+            <h1>La Cena de los Filósofos</h1>
+            <p>
+                Este sistema simula el clásico problema de sincronización de procesos. 
+                Cinco filósofos se sientan alrededor de una mesa y pasan su vida pensando y comiendo.
+                Para comer, necesitan <strong>dos tenedores</strong> (el de su izquierda y el de su derecha).
+                Si los tenedores están ocupados, deben esperar.
+            </p>
+
+            <div class="legend">
+                <div class="legend-item thinking">
+                    <span class="emoji">🤔</span>
+                    <span class="state-title">PENSANDO</span>
+                    <span class="anim-desc">Animación: Sentado tranquilo</span>
+                    <span class="anim-desc" style="font-size:0.8rem; display:block; margin-top:5px;">No necesita recursos.</span>
+                </div>
+                <div class="legend-item hungry">
+                    <span class="emoji">🤤</span>
+                    <span class="state-title">HAMBRIENTO</span>
+                    <span class="anim-desc">Animación: Sentado esperando</span>
+                    <span class="anim-desc" style="font-size:0.8rem; display:block; margin-top:5px;">Intenta tomar tenedores.</span>
+                </div>
+                <div class="legend-item eating">
+                    <span class="emoji">😋</span>
+                    <span class="state-title">COMIENDO</span>
+                    <span class="anim-desc">Animación: 👏 Aplaudiendo</span>
+                    <span class="anim-desc" style="font-size:0.8rem; display:block; margin-top:5px;">Tiene ambos tenedores.</span>
+                </div>
+            </div>
+
+            <button id="btn-start" onclick="comenzarSimulacion()">Cargando Modelos...</button>
+        </div>
     </div>
-    <div id="loading">Cargando Modelos...</div>
+
+    <div id="info">
+        <h3>La Cena de los Filósofos</h3>
+        <span style="font-size: 0.9rem; color: #ccc;">Usa Mouse o Botones para mover la cámara</span>
+    </div>
 
     <div id="cam-controls">
-        <div class="row">
-            <button onmousedown="startMove('up')" onmouseup="stopMove()" ontouchstart="startMove('up')" ontouchend="stopMove()">⬆️</button>
-        </div>
+        <div class="row"><button onmousedown="startMove('up')" onmouseup="stopMove()" ontouchstart="startMove('up')" ontouchend="stopMove()">⬆️</button></div>
         <div class="row">
             <button onmousedown="startMove('left')" onmouseup="stopMove()" ontouchstart="startMove('left')" ontouchend="stopMove()">⬅️</button>
             <button onmousedown="startMove('right')" onmouseup="stopMove()" ontouchstart="startMove('right')" ontouchend="stopMove()">➡️</button>
         </div>
-        <div class="row">
-            <button onmousedown="startMove('down')" onmouseup="stopMove()" ontouchstart="startMove('down')" ontouchend="stopMove()">⬇️</button>
-        </div>
+        <div class="row"><button onmousedown="startMove('down')" onmouseup="stopMove()" ontouchstart="startMove('down')" ontouchend="stopMove()">⬇️</button></div>
         <div class="row" style="margin-top: 10px;">
             <button onmousedown="startMove('in')" onmouseup="stopMove()" ontouchstart="startMove('in')" ontouchend="stopMove()">➕</button>
             <button onmousedown="startMove('out')" onmouseup="stopMove()" ontouchstart="startMove('out')" ontouchend="stopMove()">➖</button>
@@ -91,23 +172,42 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
-        // --- 1. GENERADOR DE TEXTURAS DE EMOJIS ---
-        function createEmojiTexture(emoji) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const context = canvas.getContext('2d');
-            context.font = '100px Arial';
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.fillText(emoji, 64, 64);
-            return new THREE.CanvasTexture(canvas);
+        // --- FUNCIONES UI ---
+        window.comenzarSimulacion = function() {
+            const overlay = document.getElementById('presentation');
+            const btn = document.getElementById('btn-start');
+            
+            // Solo si está listo
+            if (!btn.classList.contains('ready')) return;
+
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.getElementById('info').style.opacity = '1';
+                document.getElementById('cam-controls').style.display = 'flex';
+                // Arrancar la lógica aquí
+                iniciarPrueba();
+            }, 500);
         }
 
+        function notificarCargaLista() {
+            const btn = document.getElementById('btn-start');
+            btn.innerText = "COMENZAR SIMULACIÓN";
+            btn.classList.add('ready');
+        }
+
+        // --- TEXTURAS ---
+        function createEmojiTexture(emoji) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.font = '100px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, 64, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
         const texThinking = createEmojiTexture('🤔');
         const texHungry = createEmojiTexture('🤤');
         const texEating = createEmojiTexture('😋');
-
 
         // --- ESCENA ---
         const scene = new THREE.Scene();
@@ -123,13 +223,7 @@
         document.body.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
-
-        controls.mouseButtons = {
-            LEFT: THREE.MOUSE.ROTATE, 
-            MIDDLE: THREE.MOUSE.DOLLY, 
-            RIGHT: THREE.MOUSE.PAN    
-        }
-        
+        controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
         controls.maxPolarAngle = Math.PI / 2 - 0.1;
         
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
@@ -140,295 +234,242 @@
         scene.add(dirLight);
 
         const philosophers = []; 
-        const forks = [];   
+        const forks = [];    
         const mixers = []; 
         const clock = new THREE.Clock(); 
         const PHILO_COUNT = 5;
         const TABLE_RADIUS = 4;
 
-        // 1. MESA
-        const tableGeometry = new THREE.CylinderGeometry(TABLE_RADIUS, TABLE_RADIUS, 0.2, 32);
-        const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-        const table = new THREE.Mesh(tableGeometry, tableMaterial);
-        table.position.y = 1.7; 
-        table.receiveShadow = true;
-        scene.add(table);
-
-        const legGeo = new THREE.CylinderGeometry(0.5, 0.8, 1.8, 16);
-        const leg = new THREE.Mesh(legGeo, tableMaterial);
-        leg.position.y = 0.9;
-        scene.add(leg);
-
-        // --- CARGAR MODELOS ---
+        // --- CARGA DE MODELOS ---
         const loader = new GLTFLoader();
 
-        loader.load('realistic_forest.glb', function (gltf) {
-            const forest = gltf.scene;
-            
-            const box = new THREE.Box3().setFromObject(forest);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const center = new THREE.Vector3();
-            box.getCenter(center);
+        // 1. Mesa
+        loader.load('wooden_round_table.glb', function (gltf) {
+            const tableBase = gltf.scene;
+            const box = new THREE.Box3().setFromObject(tableBase);
+            const size = new THREE.Vector3(); const center = new THREE.Vector3();
+            box.getSize(size); box.getCenter(center);
+            tableBase.position.sub(center); 
 
-            const maxDim = Math.max(size.x, size.z); 
-            const targetSize = 150; 
-            const scaleFactor = targetSize / maxDim;
+            const tableWrapper = new THREE.Group(); tableWrapper.add(tableBase);
+            const scale = (TABLE_RADIUS * 2.3) / Math.max(size.x, size.z);
+            tableWrapper.scale.set(scale, scale, scale);
+            tableWrapper.position.y = (size.y * scale) / 2; 
+            tableBase.traverse(c => { if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; } });
+            scene.add(tableWrapper);
 
-            forest.scale.set(scaleFactor, scaleFactor, scaleFactor);
+            // Bosque
+            loader.load('realistic_forest.glb', function (gltf) {
+                const forest = gltf.scene;
+                const fBox = new THREE.Box3().setFromObject(forest);
+                const fSize = new THREE.Vector3(); fBox.getSize(fSize);
+                const fCenter = new THREE.Vector3(); fBox.getCenter(fCenter);
+                const fScale = 150 / Math.max(fSize.x, fSize.z);
+                forest.scale.set(fScale, fScale, fScale);
+                forest.position.set(-fCenter.x*fScale, -fCenter.y*fScale + 38.5, -fCenter.z*fScale);
+                scene.add(forest);
+            });
 
-            forest.position.x = -center.x * scaleFactor;
-            forest.position.y = -center.y * scaleFactor + 38.5; 
-            forest.position.z = -center.z * scaleFactor;
+            // Silla
+            loader.load('./chair.glb', function (gltfChair) {
+                const chairBase = gltfChair.scene;
 
-            scene.add(forest);
-
-        }, undefined, function (error) {
-            console.error("Error cargando el bosque:", error);
-        });
-
-        // 1. Cargar Silla
-        loader.load('./chair.glb', function (gltfChair) {
-            const chairBase = gltfChair.scene;
-
-            // 2. Cargar Hombre
-            loader.load('./Man.glb', function (gltfMan) {
-                
-                const manBase = gltfMan.scene;
-                const animations = gltfMan.animations;
-                document.getElementById('loading').style.display = 'none';
-
-                const clipSitting = THREE.AnimationClip.findByName(animations, 'HumanArmature|Man_Sitting');
-                const clipClapping = THREE.AnimationClip.findByName(animations, 'HumanArmature|Man_Clapping');
-
-                for (let i = 0; i < PHILO_COUNT; i++) {
-                    const angle = (i / PHILO_COUNT) * Math.PI * 2;
-                    const x = Math.cos(angle) * (TABLE_RADIUS + 0.8); 
-                    const z = Math.sin(angle) * (TABLE_RADIUS + 0.8);
+                // 2. Tenedor
+                loader.load('tenedor.glb', function (gltfFork) {
+                    const forkBase = gltfFork.scene;
+                    const fBox = new THREE.Box3().setFromObject(forkBase);
+                    const fSize = new THREE.Vector3(); const fCenter = new THREE.Vector3();
+                    fBox.getSize(fSize); fBox.getCenter(fCenter);
                     
-                    // A. SILLA
-                    const distanceFromTable = TABLE_RADIUS + 1.6;
-                    const x1 = Math.cos(angle) * distanceFromTable;
-                    const z1 = Math.sin(angle) * distanceFromTable;
-
-                    const chair = chairBase.clone();
-                    chair.scale.set(4, 4, 4); 
-                    chair.position.set(x1, -0.5, z1);
-                    chair.rotation.y = -angle - Math.PI / 2 + Math.PI; 
-                    chair.traverse((c) => { if (c.isMesh) c.castShadow = true; });
-                    scene.add(chair);
-
-                    // B. FILÓSOFO
-                    const philo = SkeletonUtils.clone(manBase);
-                    philo.scale.set(1.5, 1.5, 1.5); 
-                    philo.position.set(x, 0, z); 
-                    philo.rotation.y = -angle - Math.PI / 2; 
-
-                    philo.traverse((child) => {
-                        if (child.isMesh) {
-                            child.castShadow = true;
-                            child.material = child.material.clone(); 
-                        }
-                    });
-
-                    // --- C. EMOJI FLOTANTE ---
-                    const spriteMaterial = new THREE.SpriteMaterial({ map: texThinking });
-                    const sprite = new THREE.Sprite(spriteMaterial);
-                    sprite.scale.set(1.5, 1.5, 1); 
-                    sprite.position.y = 5; 
-                    philo.add(sprite); 
-                    philo.userData.emojiSprite = sprite; 
-
-                    scene.add(philo);
-                    philosophers.push(philo);
-
-                    // D. ANIMACIONES
-                    const mixer = new THREE.AnimationMixer(philo);
-                    mixers.push(mixer);
-                    philo.userData.actions = {};
+                    forkBase.position.sub(fCenter);
+                    forkBase.rotation.y = Math.PI; 
+                    const forkWrapper = new THREE.Group(); forkWrapper.add(forkBase);
                     
-                    if (clipSitting) {
-                        const action = mixer.clipAction(clipSitting);
-                        action.setLoop(THREE.LoopRepeat, Infinity);
-                        philo.userData.actions['SITTING'] = action;
-                    }
-                    if (clipClapping) {
-                        const action = mixer.clipAction(clipClapping);
-                        action.setLoop(THREE.LoopRepeat, Infinity);
-                        philo.userData.actions['CLAPPING'] = action;
-                    }
+                    // ESCALA TENEDOR
+                    const fScale = 0.9 / Math.max(fSize.x, fSize.y, fSize.z);
+                    forkWrapper.scale.set(fScale, fScale, fScale);
+                    forkBase.traverse(c => { if(c.isMesh) c.castShadow=true; });
 
-                    // E. TENEDOR
-                    const angleFork = ((i + 0.5) / PHILO_COUNT) * Math.PI * 2;
-                    const fX = Math.cos(angleFork) * (TABLE_RADIUS - 1);
-                    const fZ = Math.sin(angleFork) * (TABLE_RADIUS - 1);
-                    const fork = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.1, 0.1, 1), 
-                        new THREE.MeshStandardMaterial({ color: 0xC0C0C0 })
-                    );
-                    fork.position.set(fX, 1.9, fZ);
-                    fork.lookAt(0, 1.9, 0);
-                    scene.add(fork);
-                    forks.push(fork);
-                }
+                    // 3. Comida
+                    loader.load('food.glb', function (gltfFood) {
+                        const foodBase = gltfFood.scene;
+                        const fdBox = new THREE.Box3().setFromObject(foodBase);
+                        const fdSize = new THREE.Vector3(); const fdCenter = new THREE.Vector3();
+                        fdBox.getSize(fdSize); fdBox.getCenter(fdCenter);
+                        
+                        foodBase.position.sub(fdCenter);
+                        const foodWrapper = new THREE.Group(); foodWrapper.add(foodBase);
 
-                // Inicializar
-                for (let i = 0; i < PHILO_COUNT; i++) {
-                    const philo = philosophers[i];
-                    if(philo) {
-                        philo.userData.currentState = null;
-                        window.actualizarFilosofo(i, 'THINKING');
-                    }
-                }
-                iniciarPrueba();
+                        // ESCALA PLATO
+                        const fdScale = 1.3 / Math.max(fdSize.x, fdSize.z);
+                        foodWrapper.scale.set(fdScale, fdScale, fdScale);
+                        foodBase.traverse(c => { if(c.isMesh) c.castShadow=true; });
 
-            }, undefined, function(e) { console.error("Error cargando Man.glb", e); }); 
-        }, undefined, function(e) { console.error("Error cargando chair.glb", e); }); 
+                        // 4. Filósofo
+                        loader.load('./Man.glb', function (gltfMan) {
+                            const manBase = gltfMan.scene;
+                            const animations = gltfMan.animations;
+                            // Ya no ocultamos loading aquí, lo hace el botón de "Comenzar"
 
+                            const clipSit = THREE.AnimationClip.findByName(animations, 'HumanArmature|Man_Sitting');
+                            const clipClap = THREE.AnimationClip.findByName(animations, 'HumanArmature|Man_Clapping');
 
-        // --- LÓGICA ---
+                            for (let i = 0; i < PHILO_COUNT; i++) {
+                                const angle = (i / PHILO_COUNT) * Math.PI * 2;
+                                
+                                // Silla y Filósofo
+                                const chair = chairBase.clone();
+                                chair.scale.set(4, 4, 4); 
+                                chair.position.set(Math.cos(angle)*(TABLE_RADIUS+1.6), -0.5, Math.sin(angle)*(TABLE_RADIUS+1.6));
+                                chair.rotation.y = -angle - Math.PI / 2 + Math.PI; 
+                                scene.add(chair);
+
+                                const philo = SkeletonUtils.clone(manBase);
+                                philo.scale.set(1.5, 1.5, 1.5); 
+                                philo.position.set(Math.cos(angle)*(TABLE_RADIUS+0.8), 0, Math.sin(angle)*(TABLE_RADIUS+0.8)); 
+                                philo.rotation.y = -angle - Math.PI / 2; 
+                                philo.traverse(c => { if(c.isMesh){ c.castShadow=true; c.material=c.material.clone(); } });
+                                scene.add(philo); philosophers.push(philo);
+
+                                // Emoji
+                                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texThinking }));
+                                sprite.scale.set(1.5, 1.5, 1); sprite.position.y = 5; 
+                                philo.add(sprite); philo.userData.emojiSprite = sprite; 
+
+                                // Animaciones
+                                const mixer = new THREE.AnimationMixer(philo);
+                                mixers.push(mixer);
+                                philo.userData.actions = {};
+                                if (clipSit) {
+                                    const action = mixer.clipAction(clipSit);
+                                    action.setLoop(THREE.LoopRepeat, Infinity);
+                                    philo.userData.actions['SITTING'] = action;
+                                }
+                                if (clipClap) {
+                                    const action = mixer.clipAction(clipClap);
+                                    action.setLoop(THREE.LoopRepeat, Infinity);
+                                    philo.userData.actions['CLAPPING'] = action;
+                                }
+
+                                // --- COLOCACIÓN ELEMENTOS MESA ---
+                                const alturaMesa = 3.45; 
+                                const distanciaAlCentro = TABLE_RADIUS - 1.2;
+
+                                // A. PLATO
+                                const plate = foodWrapper.clone();
+                                plate.position.set(
+                                    Math.cos(angle) * distanciaAlCentro, 
+                                    alturaMesa, 
+                                    Math.sin(angle) * distanciaAlCentro
+                                );
+                                scene.add(plate);
+
+                                // B. TENEDOR (En el ángulo intermedio)
+                                const angleFork = ((i + 0.5) / PHILO_COUNT) * Math.PI * 2;
+                                const fork = forkWrapper.clone();
+                                fork.position.set(
+                                    Math.cos(angleFork) * distanciaAlCentro, 
+                                    alturaMesa, 
+                                    Math.sin(angleFork) * distanciaAlCentro
+                                );
+                                fork.lookAt(0, alturaMesa, 0); 
+                                scene.add(fork); forks.push(fork);
+                            }
+
+                            // Preparamos a los filósofos (sin iniciar lógica aún)
+                            for (let i = 0; i < PHILO_COUNT; i++) window.actualizarFilosofo(i, 'THINKING');
+                            
+                            // ¡TODO CARGADO! Habilitar botón
+                            notificarCargaLista();
+
+                        }, undefined, e => console.error(e)); 
+                    }, undefined, e => console.error(e)); 
+                }, undefined, e => console.error(e));
+            }, undefined, e => console.error(e));
+        }, undefined, e => console.error(e));
+
+        // --- LÓGICA FILÓSOFOS ---
         function checkForksGlobal() {
             for (let i = 0; i < PHILO_COUNT; i++) {
-                const leftN = i; 
-                const rightN = (i + 1) % PHILO_COUNT;
-                const isLeftEating = philosophers[leftN].userData.state === 'EATING';
-                const isRightEating = philosophers[rightN].userData.state === 'EATING';
-                
-                forks[i].visible = !(isLeftEating || isRightEating);
+                const l = i; const r = (i + 1) % PHILO_COUNT;
+                forks[i].visible = !(philosophers[l].userData.state === 'EATING' || philosophers[r].userData.state === 'EATING');
             }
         }
 
         window.actualizarFilosofo = function(id, estado) {
-            const philo = philosophers[id];
-            const mixer = mixers[id];
-            if (!philo || !mixer) return;
-
+            const philo = philosophers[id]; if (!philo) return;
             if (philo.userData.currentState === estado) return;
-            philo.userData.currentState = estado;
-            philo.userData.state = estado; 
+            philo.userData.currentState = estado; philo.userData.state = estado;
 
             const actions = philo.userData.actions;
             const sprite = philo.userData.emojiSprite;
-            const fadeDuration = 0.5;
+            const fade = 0.5;
 
             if (estado === 'THINKING') {
-                if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fadeDuration);
-                if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fadeDuration).play();
+                if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fade);
+                if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fade).play();
                 if (sprite) sprite.material.map = texThinking;
             } 
             else if (estado === 'HUNGRY') {
-                if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fadeDuration);
-                if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fadeDuration).play();
+                if (actions['CLAPPING']) actions['CLAPPING'].fadeOut(fade);
+                if (actions['SITTING']) actions['SITTING'].reset().fadeIn(fade).play();
                 if (sprite) sprite.material.map = texHungry;
             }
             else if (estado === 'EATING') {
-                if (actions['SITTING']) actions['SITTING'].fadeOut(fadeDuration);
-                if (actions['CLAPPING']) actions['CLAPPING'].reset().fadeIn(fadeDuration).play();
+                if (actions['SITTING']) actions['SITTING'].fadeOut(fade);
+                if (actions['CLAPPING']) actions['CLAPPING'].reset().fadeIn(fade).play();
                 if (sprite) sprite.material.map = texEating;
             }
             checkForksGlobal();
         }
 
-        // --- VARIABLES PARA LOS BOTONES Y TECLADO ---
+        // --- CONTROLES ---
         let moveDirection = null;
-        window.startMove = function(dir) {
-            moveDirection = dir;
-        };
-        window.stopMove = function() {
-            moveDirection = null;
-        };
-
-        // --- ESCUCHAR TECLADO ---
-        window.addEventListener('keydown', (event) => {
-            const key = event.key.toLowerCase();
-            if (key === 'arrowleft' || key === 'a') startMove('left');
-            if (key === 'arrowright' || key === 'd') startMove('right');
-            if (key === 'arrowup' || key === 'w') startMove('up');
-            if (key === 'arrowdown' || key === 's') startMove('down');
-            if (key === '+' || key === 'q') startMove('in'); 
-            if (key === '-' || key === 'e') startMove('out'); 
+        window.startMove = (d) => moveDirection = d;
+        window.stopMove = () => moveDirection = null;
+        window.addEventListener('keydown', e => {
+            const k = e.key.toLowerCase();
+            if(k==='arrowleft'||k==='a') startMove('left'); if(k==='arrowright'||k==='d') startMove('right');
+            if(k==='arrowup'||k==='w') startMove('up'); if(k==='arrowdown'||k==='s') startMove('down');
+            if(k==='+'||k==='q') startMove('in'); if(k==='-'||k==='e') startMove('out');
         });
-
-        window.addEventListener('keyup', (event) => {
-            stopMove();
-        });
+        window.addEventListener('keyup', stopMove);
 
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
             mixers.forEach(m => m.update(delta));
-            
-            // --- LÓGICA DE MOVIMIENTO POR BOTONES/TECLADO ---
             if (moveDirection) {
-                const speed = 0.05; 
-                const zoomSpeed = 0.5; 
-
-                if (moveDirection === 'left') {
-                    const x = camera.position.x;
-                    const z = camera.position.z;
-                    camera.position.x = x * Math.cos(speed) - z * Math.sin(speed);
-                    camera.position.z = x * Math.sin(speed) + z * Math.cos(speed);
-                }
-                else if (moveDirection === 'right') {
-                    const x = camera.position.x;
-                    const z = camera.position.z;
-                    camera.position.x = x * Math.cos(-speed) - z * Math.sin(-speed);
-                    camera.position.z = x * Math.sin(-speed) + z * Math.cos(-speed);
-                }
-                else if (moveDirection === 'up') {
-                    camera.position.y += zoomSpeed; 
-                }
-                else if (moveDirection === 'down') {
-                    camera.position.y -= zoomSpeed;
-                    if(camera.position.y < 1) camera.position.y = 1; 
-                }
-                else if (moveDirection === 'in') {
-                    camera.translateZ(-zoomSpeed); 
-                }
-                else if (moveDirection === 'out') {
-                    camera.translateZ(zoomSpeed); 
-                }
-                
-                camera.lookAt(0, 2, 0); 
+                const s = 0.05, zS = 0.5;
+                if (moveDirection === 'left') { camera.position.x = camera.position.x*Math.cos(s) - camera.position.z*Math.sin(s); camera.position.z = camera.position.x*Math.sin(s) + camera.position.z*Math.cos(s); }
+                else if (moveDirection === 'right') { camera.position.x = camera.position.x*Math.cos(-s) - camera.position.z*Math.sin(-s); camera.position.z = camera.position.x*Math.sin(-s) + camera.position.z*Math.cos(-s); }
+                else if (moveDirection === 'up') camera.position.y += zS;
+                else if (moveDirection === 'down') { camera.position.y -= zS; if(camera.position.y < 1) camera.position.y = 1; }
+                else if (moveDirection === 'in') camera.translateZ(-zS);
+                else if (moveDirection === 'out') camera.translateZ(zS);
+                camera.lookAt(0, 2, 0);
             }
-            
             controls.update();
             renderer.render(scene, camera);
         }
         animate();
 
         function iniciarPrueba() {
-            console.log("Iniciando simulación...");
+            console.log("Simulación iniciada.");
             setInterval(() => {
                 const id = Math.floor(Math.random() * PHILO_COUNT);
                 const philo = philosophers[id];
-                const currentState = philo.userData.state;
-
-                if (currentState === 'THINKING') {
-                    window.actualizarFilosofo(id, 'HUNGRY');
-                } 
-                else if (currentState === 'HUNGRY') {
-                    const leftN = (id + PHILO_COUNT - 1) % PHILO_COUNT;
-                    const rightN = (id + 1) % PHILO_COUNT;
-
-                    if (philosophers[leftN].userData.state !== 'EATING' && philosophers[rightN].userData.state !== 'EATING') {
+                if (philo.userData.state === 'THINKING') window.actualizarFilosofo(id, 'HUNGRY');
+                else if (philo.userData.state === 'HUNGRY') {
+                    const l = (id + PHILO_COUNT - 1) % PHILO_COUNT; const r = (id + 1) % PHILO_COUNT;
+                    if (philosophers[l].userData.state !== 'EATING' && philosophers[r].userData.state !== 'EATING') {
                         window.actualizarFilosofo(id, 'EATING');
-                        const tiempoComiendo = 3000 + Math.random() * 2000;
-                        setTimeout(() => {
-                            if (philosophers[id].userData.state === 'EATING') {
-                                window.actualizarFilosofo(id, 'THINKING');
-                            }
-                        }, tiempoComiendo);
+                        setTimeout(() => { if (philo.userData.state === 'EATING') window.actualizarFilosofo(id, 'THINKING'); }, 3000 + Math.random() * 2000);
                     }
                 }
             }, 500);
         }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
 </body>
 </html>
